@@ -1,0 +1,3 @@
+# Copy to tools/blip-report.conf (ignored by git) and set your server:
+#   cp tools/blip-report.conf.example tools/blip-report.conf
+host = user@server

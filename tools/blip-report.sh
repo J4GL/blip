@@ -3,8 +3,10 @@
 #   ./tools/blip-report.sh --host user@server --at "2026-11-20 15:32" [--window 10m]
 #   ./tools/blip-report.sh --host user@server --from "2026-11-20 15:00" --to "2026-11-20 15:20"
 #   ./tools/blip-report.sh --host user@server --last 2d [--no-open]
-# Times are in this computer's local time. --host can also come from $BLIP_HOST; the
-# remote binary path from $BLIP_BIN (default /usr/local/bin/blip). Windows up to 6 h
+# Times are in this computer's local time. --host can also come from $BLIP_HOST or a
+# line `host = user@server` in tools/blip-report.conf (ignored by git; other path:
+# $BLIP_REPORT_CONF); then just run e.g. ./tools/blip-report.sh --last 2d. The remote
+# binary path comes from $BLIP_BIN (default /usr/local/bin/blip). Windows up to 6 h
 # use every 100 ms row; longer ones (up to 8 days) are summarised on the server in
 # steps of a few seconds that keep the peaks.
 # Needs ssh and python3.
@@ -24,11 +26,18 @@ while [ $# -gt 0 ]; do
     --last) LAST="$2"; shift 2 ;;
     --host) HOST="$2"; shift 2 ;;
     --no-open) OPEN=0; shift ;;
-    *) sed -n '2,10p' "$0" >&2; exit 2 ;;
+    *) sed -n '2,12p' "$0" >&2; exit 2 ;;
   esac
 done
 
-[ -n "$HOST" ] || { echo "blip-report: --host user@server is required" >&2; exit 2; }
+CONF="${BLIP_REPORT_CONF:-$ROOT_DIR/tools/blip-report.conf}"
+if [ -z "$HOST" ] && [ -f "$CONF" ]; then
+  HOST="$(sed -n 's/^[[:space:]]*host[[:space:]]*=[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$/\1/p' "$CONF" | tail -n 1)"
+fi
+[ -n "$HOST" ] || {
+  echo "blip-report: no server: pass --host user@server, or put 'host = user@server' in tools/blip-report.conf" >&2
+  exit 2
+}
 [[ "$HOST" =~ ^[A-Za-z0-9_][A-Za-z0-9._@:-]*$ ]] || { echo "blip-report: bad --host" >&2; exit 2; }
 [[ "$REMOTE_BIN" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "blip-report: bad BLIP_BIN" >&2; exit 2; }
 

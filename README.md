@@ -108,6 +108,13 @@ From your computer, an HTML report with charts (needs SSH access and Python 3):
 ./tools/blip-report.sh --host user@server --at "2026-11-20 15:32" --window 10m
 ```
 
+To skip `--host`, save your server once in `tools/blip-report.conf` (ignored by git):
+
+```bash
+cp tools/blip-report.conf.example tools/blip-report.conf   # then edit: host = user@server
+./tools/blip-report.sh --last 2d
+```
+
 Times there are in your computer's local time. Red bands mark detected spikes.
 Windows up to 6 h show every 100 ms sample. Longer ones (up to 8 days) are summarised
 on the server in steps of a few seconds (6 s for 2 days): CPU, disk and network are

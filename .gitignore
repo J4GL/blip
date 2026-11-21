@@ -3,3 +3,5 @@ dist/
 reports/
 __pycache__/
 SPEC/
+tools/blip-report.conf
+.DS_Store
