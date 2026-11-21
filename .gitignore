@@ -1,0 +1,5 @@
+.build/
+dist/
+reports/
+__pycache__/
+SPEC/

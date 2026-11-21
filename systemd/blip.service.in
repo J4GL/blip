@@ -1,0 +1,50 @@
+# blip: records latency causes every 100 ms, keeps 7 days (SPEC/runtime.md).
+# Template: install.sh fills in @BINDIR@, @CONFIG@ and @RWPATHS@.
+[Unit]
+Description=blip latency recorder
+# Start before Docker so the nginx socket exists when an nginx container starts.
+Before=docker.service
+
+[Service]
+Type=simple
+ExecStart=@BINDIR@/blip run --config @CONFIG@
+Restart=on-failure
+RestartSec=5
+Nice=10
+CPUQuota=5%
+MemoryMax=16M
+MemorySwapMax=0
+LimitNOFILE=4096
+UMask=0022
+StateDirectory=blip
+StateDirectoryMode=0755
+RuntimeDirectory=blip
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+# Hardening: root only to read every /proc/<pid>/io; everything else is locked down.
+ProtectSystem=strict
+@RWPATHS@
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

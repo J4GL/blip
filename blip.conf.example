@@ -1,0 +1,38 @@
+# blip configuration — one "key = value" per line, "#" starts a comment line.
+# Every key is a `blip run` option without the leading "--" (see `blip` for the list).
+# The command line wins over this file. After a change: sudo systemctl restart blip
+
+# Where the data goes, how long it stays, and the hard size cap.
+data = /var/lib/blip
+retention-days = 7
+max-mb = 250
+
+# Fast sampling period (10ms..1s, must divide 1s).
+interval = 100ms
+
+# Probes, once per second. "none" disables one.
+#   probe-tcp: a local TCP service to connect to, e.g. 127.0.0.1:443 (web server)
+#   probe-gw:  ping the default gateway ("auto"), or an IP
+#   probe-ext: ping an outside IP
+probe-tcp = none
+probe-gw = auto
+probe-ext = 1.1.1.1
+
+# nginx request timings (optional, see README "nginx").
+#   nginx-sock = /run/blip/nginx.sock
+nginx-sock = none
+
+# Container names for Docker processes ("none" to skip).
+docker-root = /var/lib/docker/containers
+
+# Spike thresholds (an event is written when one is crossed).
+# th-psi-cpu = 25      # % of time tasks wait for CPU
+# th-psi-io = 25       # % of time tasks wait for disk
+# th-psi-mem = 10      # % of time tasks wait for memory
+# th-steal = 10        # % of CPU taken by the hypervisor
+# th-iowait = 30       # % of CPU idle waiting for disk
+# th-blocked = 3       # tasks blocked on I/O
+# th-lag-ms = 50       # blip's own timer late by more than this
+# th-probe-ms = 100    # local/gateway probe slower than this, or failed
+# th-probe-ext-ms = 300
+# th-nginx-ms = 500    # nginx p99 request time
