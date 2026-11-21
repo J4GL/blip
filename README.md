@@ -115,6 +115,12 @@ cp tools/blip-report.conf.example tools/blip-report.conf   # then edit: host = u
 ./tools/blip-report.sh --last 2d
 ```
 
+[![Example report: a CPU spike (19.7 s, caused by `yes`) and a disk spike (1.1 s, `dd` + `sync`)](docs/example-report.png)](https://j4gl.github.io/blip/example-report.html)
+
+**[Open the full example report](https://j4gl.github.io/blip/example-report.html)**: 3 minutes recorded
+on a 1 vCPU test server with a CPU spike and a disk spike
+([file](docs/example-report.html)).
+
 Times there are in your computer's local time. Red bands mark detected spikes.
 Windows up to 6 h show every 100 ms sample. Longer ones (up to 8 days) are summarised
 on the server in steps of a few seconds (6 s for 2 days): CPU, disk and network are
