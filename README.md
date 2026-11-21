@@ -69,6 +69,7 @@ Remove: `sudo ./install.sh --uninstall` (add `--purge` to delete config and data
 | `probe-gw` | `auto` | ping the default gateway, an IP, or `none` |
 | `probe-ext` | `1.1.1.1` | ping an outside IP, or `none` |
 | `nginx-sock` | `none` | receive nginx request times (below) |
+| `health-http` | `none` | answer `OK` over HTTP for an uptime checker (below) |
 | `docker-root` | `/var/lib/docker/containers` | name Docker containers, or `none` |
 | `th-*` | see the example | spike thresholds |
 
@@ -86,6 +87,21 @@ access_log syslog:server=unix:/run/blip/nginx.sock,tag=nginx,nohostname blip;
 
 If nginx runs in Docker, mount the folder read-only: `-v /run/blip:/run/blip:ro`.
 If blip is stopped, nginx keeps serving; it reconnects when blip comes back.
+
+### Uptime check (optional)
+
+To let a service such as instatus.com check that blip is still running, give it a
+port (1024 or higher) and open that port in the firewall:
+
+```bash
+sudo ./install.sh --set health-http=0.0.0.0:8099
+sudo ufw allow 8099/tcp
+curl -i http://your-server:8099/
+```
+
+Every request, whatever the path, gets `200 OK` with the body `OK` and headers that
+forbid caching. The answer comes from the loop that takes the samples, so if blip
+stops or hangs, the check fails. It is not a web server: nothing else is served.
 
 ## Reading the data
 

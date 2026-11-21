@@ -22,6 +22,12 @@ probe-ext = 1.1.1.1
 #   nginx-sock = /run/blip/nginx.sock
 nginx-sock = none
 
+# HTTP health check for an uptime service (e.g. instatus.com): every request gets
+# "200 OK" with the body "OK" and no caching. IPv4:port, port 1024 or higher.
+# Open the port in the firewall yourself (e.g. sudo ufw allow 8099/tcp).
+#   health-http = 0.0.0.0:8099
+health-http = none
+
 # Container names for Docker processes ("none" to skip).
 docker-root = /var/lib/docker/containers
 

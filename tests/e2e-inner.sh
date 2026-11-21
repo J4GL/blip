@@ -58,6 +58,46 @@ PY
 pass "VPSMON-NGINX-002 live nginx socket"
 
 # ---------------------------------------------------------------------------
+echo "=== VPSMON-HEALTH-002 live health check ==="
+"$BIN" run --data "$T/h" --for 6s --health-http 127.0.0.1:18089 --nginx-sock none --probe-tcp none --probe-gw none --probe-ext none &
+HPID=$!
+sleep 2
+python3 - <<'PY' || fail "health answers wrong"
+import urllib.request
+CC = "no-store, no-cache, must-revalidate, max-age=0"
+for method in ("GET", "GET", "HEAD"):
+    with urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:18089/x?y", method=method), timeout=3) as r:
+        assert r.status == 200 and r.headers["Cache-Control"] == CC, (method, r.status, dict(r.headers))
+        body = r.read()
+        assert method == "HEAD" or body == b"OK", body
+PY
+wait "$HPID" || fail "blip run exited with an error"
+python3 - <<'PY' || fail "port still open after exit"
+import socket
+try:
+    socket.create_connection(("127.0.0.1", 18089), timeout=2); raise SystemExit(1)
+except ConnectionRefusedError:
+    pass
+PY
+python3 -c 'import socket, time; s = socket.socket(); s.bind(("127.0.0.1", 18090)); s.listen(1); time.sleep(2)' &
+BUSY=$!
+sleep 0.5
+"$BIN" run --data "$T/h3" --for 6s --health-http 127.0.0.1:18090 --nginx-sock none --probe-tcp none --probe-gw none --probe-ext none 2> "$T/h3.err" &
+HPID=$!
+wait "$BUSY"
+sleep 2
+python3 - <<'PY' || fail "health not answering after the port was freed"
+import urllib.request
+with urllib.request.urlopen("http://127.0.0.1:18090/", timeout=3) as r:
+    assert r.status == 200 and r.read() == b"OK"
+PY
+wait "$HPID" || fail "blip run (busy port) exited with an error"
+[ "$(grep -c 'health-http .* unavailable' "$T/h3.err")" = 1 ] || fail "expected one 'unavailable' line: $(cat "$T/h3.err")"
+set +e; OUT=$("$BIN" run --data "$T/h2" --for 1s --health-http 127.0.0.1 2>&1); RC=$?; set -e
+[ "$RC" = 2 ] && [[ "$OUT" == *--health-http* ]] || fail "bad --health-http gave rc=$RC: $OUT"
+pass "VPSMON-HEALTH-002 live health check"
+
+# ---------------------------------------------------------------------------
 echo "=== VPSMON-RUN-001 budget and spike ==="
 D="$T/idle"
 START=$(date +%s)

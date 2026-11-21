@@ -23,7 +23,7 @@ CONFIG_DIR=/etc/blip
 UNIT=/etc/systemd/system/blip.service
 BINARY="" MODE=install PURGE=0 NO_SYSTEMD=0 KEEP_IMAGE=0
 SETS=()
-KEYS="data interval retention-days max-mb proc sys docker-root nginx-sock probe-tcp probe-gw probe-ext
+KEYS="data interval retention-days max-mb proc sys docker-root nginx-sock health-http probe-tcp probe-gw probe-ext
 zstd-level th-psi-cpu th-psi-io th-psi-mem th-steal th-iowait th-blocked th-lag-ms th-probe-ms
 th-probe-ext-ms th-nginx-ms"
 

@@ -8,7 +8,7 @@ int t_fail;
 const char *t_case_label;
 
 extern const t_test tests_config[], tests_procfs[], tests_sampler[], tests_colstore[], tests_detect[],
-    tests_nginxlog[], tests_probe[], tests_report[], tests_run[];
+    tests_nginxlog[], tests_probe[], tests_report[], tests_run[], tests_health[];
 
 char *t_tmpdir(void) {
     char tmpl[] = "/tmp/blip-test-XXXXXX";
@@ -38,7 +38,7 @@ void t_rmrf(const char *dir) { nftw(dir, rm_one, 16, FTW_DEPTH | FTW_PHYS); }
 int main(int argc, char **argv) {
     const char *filter = argc > 1 ? argv[1] : NULL;
     const t_test *suites[] = { tests_config, tests_procfs, tests_sampler, tests_colstore, tests_detect,
-                               tests_nginxlog, tests_probe, tests_report, tests_run };
+                               tests_nginxlog, tests_probe, tests_report, tests_run, tests_health };
     int ran = 0, failed = 0;
     for (size_t s = 0; s < sizeof suites / sizeof *suites; s++) {
         for (const t_test *t = suites[s]; t->name; t++) {

@@ -5,7 +5,7 @@ WARN    := -std=c11 -D_GNU_SOURCE -Wall -Wextra -Wpedantic -Wshadow -Wconversion
 REL     := -O2 -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE
 TESTF   := -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
 SRC     := src/config.c src/util.c src/procfs.c src/sampler.c src/colstore.c src/detect.c \
-           src/nginxlog.c src/probe.c src/report.c
+           src/nginxlog.c src/probe.c src/report.c src/health.c
 HDR     := $(wildcard src/*.h)
 TESTS   := $(wildcard tests/*.c)
 

@@ -2,6 +2,7 @@
 #include "colstore.h"
 #include "config.h"
 #include "detect.h"
+#include "health.h"
 #include "nginxlog.h"
 #include "probe.h"
 #include "report.h"
@@ -20,7 +21,7 @@
 #include <sys/timerfd.h>
 #include <unistd.h>
 
-#define BLIP_VERSION "1.1.0"
+#define BLIP_VERSION "1.2.0"
 #define HOUR_MS 3600000LL
 #define DEFAULT_CONFIG "/etc/blip/blip.conf"
 
@@ -28,6 +29,7 @@ static void usage(void) {
     fputs("usage:\n"
           "  blip run    [--config FILE] [--data DIR] [--for DUR] [--interval 100ms] [--retention-days 7] [--max-mb 250]\n"
           "                [--proc /proc] [--sys /sys] [--docker-root DIR] [--nginx-sock PATH|none]\n"
+          "                [--health-http IP:PORT|none]\n"
           "                [--probe-tcp IP:PORT|none] [--probe-gw IP|auto|none] [--probe-ext IP|none]\n"
           "                [--zstd-level 9] [--th-psi-cpu 25] [--th-psi-io 25] [--th-psi-mem 10] [--th-steal 10]\n"
           "                [--th-iowait 30] [--th-blocked 3] [--th-lag-ms 50] [--th-probe-ms 100]\n"
@@ -57,11 +59,12 @@ static int parse_int(const char *s, long lo, long hi, long *out) {
 /* ------------------------------------------------------------------- run */
 
 enum { O_DATA = 1, O_FOR, O_INTERVAL, O_RET, O_MAXMB, O_PROC, O_DOCKER, O_NGINX, O_PTCP, O_PGW, O_PEXT,
-       O_LEVEL, O_SYS, O_TPC, O_TPI, O_TPM, O_TST, O_TIW, O_TBL, O_TLAG, O_TPR, O_TPE, O_TNG };
+       O_LEVEL, O_SYS, O_HEALTH, O_TPC, O_TPI, O_TPM, O_TST, O_TIW, O_TBL, O_TLAG, O_TPR, O_TPE, O_TNG };
 static const struct option run_lo[] = {
     { "data", 1, 0, O_DATA }, { "for", 1, 0, O_FOR }, { "interval", 1, 0, O_INTERVAL },
     { "retention-days", 1, 0, O_RET }, { "max-mb", 1, 0, O_MAXMB }, { "proc", 1, 0, O_PROC },
-    { "docker-root", 1, 0, O_DOCKER }, { "sys", 1, 0, O_SYS }, { "nginx-sock", 1, 0, O_NGINX }, { "probe-tcp", 1, 0, O_PTCP },
+    { "docker-root", 1, 0, O_DOCKER }, { "sys", 1, 0, O_SYS }, { "nginx-sock", 1, 0, O_NGINX },
+    { "health-http", 1, 0, O_HEALTH }, { "probe-tcp", 1, 0, O_PTCP },
     { "probe-gw", 1, 0, O_PGW }, { "probe-ext", 1, 0, O_PEXT }, { "zstd-level", 1, 0, O_LEVEL },
     { "th-psi-cpu", 1, 0, O_TPC }, { "th-psi-io", 1, 0, O_TPI }, { "th-psi-mem", 1, 0, O_TPM },
     { "th-steal", 1, 0, O_TST }, { "th-iowait", 1, 0, O_TIW }, { "th-blocked", 1, 0, O_TBL },
@@ -146,7 +149,7 @@ static void cfg_free(cfgv *c) {
 /* ------------------------------------------------------------------- run */
 
 typedef struct {
-    const char *data, *proc, *sys, *docker, *nginx, *ptcp, *pgw, *pext;
+    const char *data, *proc, *sys, *docker, *nginx, *ptcp, *pgw, *pext, *health;
     int64_t for_ms, interval_ms, max_bytes;
     long days, level;
     det_cfg th;
@@ -166,6 +169,12 @@ static int parse_run(int argc, char **argv, run_opts *o) {
         case O_DOCKER: o->docker = strcmp(optarg, "none") ? optarg : NULL; break;
         case O_SYS: o->sys = optarg; break;
         case O_NGINX: o->nginx = optarg; break;
+        case O_HEALTH: {
+            struct sockaddr_in a;
+            if (strcmp(optarg, "none") && health_parse(optarg, &a)) return bad("--health-http (IPv4:port)", optarg);
+            o->health = optarg;
+            break;
+        }
         case O_PTCP: o->ptcp = optarg; break;
         case O_PGW: o->pgw = optarg; break;
         case O_PEXT: o->pext = optarg; break;
@@ -204,9 +213,25 @@ static int parse_run(int argc, char **argv, run_opts *o) {
 
 static int run_loop(const run_opts *op);
 
+/* Open the health socket; on failure, log once (with a hint for ports below 1024) and let
+   the caller retry every second. SPEC/health.md */
+static int health_try(const char *addr, int *warned) {
+    int fd = health_open(addr);
+    if (fd < 0 && !*warned) {
+        int e = errno;
+        fprintf(stderr, "blip: health-http %s unavailable (%s)%s, retrying every second\n", addr, strerror(e),
+                e == EACCES ? "; ports below 1024 need a capability the blip service does not have" : "");
+        *warned = 1;
+    } else if (fd >= 0 && *warned) {
+        fprintf(stderr, "blip: health-http %s answering now\n", addr);
+        *warned = 0;
+    }
+    return fd;
+}
+
 static int cmd_run(int argc, char **argv) {
     run_opts o = { "/var/lib/blip", "/proc", "/sys", "/var/lib/docker/containers", "none",
-                   "none", "auto", "1.1.1.1", 0, 100, 250LL * 1024 * 1024, 7, CS_DEFAULT_LEVEL, { 0 } };
+                   "none", "auto", "1.1.1.1", "none", 0, 100, 250LL * 1024 * 1024, 7, CS_DEFAULT_LEVEL, { 0 } };
     det_cfg_default(&o.th);
     /* built-in defaults < config file < command line: the file's settings go first in argv */
     const char *cfg_path = strip_config(&argc, argv);
@@ -242,6 +267,8 @@ static int run_loop(const run_opts *op) {
     int ngx = strcmp(o.nginx, "none") ? ngx_open(o.nginx) : -1;
     if (strcmp(o.nginx, "none") && ngx < 0) fprintf(stderr, "blip: nginx socket %s unavailable, continuing\n", o.nginx);
     ngx_agg *agg = calloc(1, sizeof *agg);
+    int want_health = strcmp(o.health, "none") != 0, h_warned = 0, h_left = HEALTH_PER_TICK;
+    int hfd = want_health ? health_try(o.health, &h_warned) : -1;
 
     int block_fast = (int)(CS_BLOCK_MS / o.interval_ms);
     cs_writer *wf = cs_writer_open_numeric(o.data, "fast", fast_cols, F_NCOLS, block_fast, (int)o.level);
@@ -274,15 +301,17 @@ static int run_loop(const run_opts *op) {
     uint64_t ticks = 0;
     int rc = 0;
     int64_t f[F_NCOLS] = { 0 }, s[S_NCOLS] = { 0 };
-    struct pollfd pfd[8];
+    struct pollfd pfd[10];
     while (!g_stop) {
         int n = 0;
         pfd[n++] = (struct pollfd){ tfd, POLLIN, 0 };
         pfd[n++] = (struct pollfd){ sfd, POLLIN, 0 };
         int ngx_i = -1;
         if (ngx >= 0) { ngx_i = n; pfd[n++] = (struct pollfd){ ngx, POLLIN, 0 }; }
+        int h_i = -1;
+        if (hfd >= 0 && h_left > 0) { h_i = n; pfd[n++] = (struct pollfd){ hfd, POLLIN, 0 }; }
         int pb = n;
-        n += probe_fds(prb, pfd + n, 8 - n);
+        n += probe_fds(prb, pfd + n, 10 - n);
         if (poll(pfd, (nfds_t)n, -1) < 0) {
             if (errno == EINTR) continue;
             perror("blip: poll");
@@ -294,11 +323,16 @@ static int run_loop(const run_opts *op) {
             while (read(sfd, &si, sizeof si) == (ssize_t)sizeof si) g_stop = 1;
         }
         if (ngx_i >= 0 && pfd[ngx_i].revents) ngx_drain(ngx, agg);
+        if (h_i >= 0 && pfd[h_i].revents) { /* budget per tick; an accept error waits for the next tick */
+            int r = health_serve(hfd, h_left);
+            h_left = r < 0 ? 0 : h_left - r;
+        }
         if (n > pb) probe_handle(prb, pfd + pb, n - pb);
         if (!pfd[0].revents) continue;
 
         uint64_t exp = 0;
         if (read(tfd, &exp, sizeof exp) != (ssize_t)sizeof exp || !exp) continue;
+        h_left = HEALTH_PER_TICK;
         uint64_t before = ticks;
         ticks += exp;
         int64_t now_us = now_mono_us(), lag = now_us - (start_us + (int64_t)ticks * ivl_us);
@@ -321,6 +355,7 @@ static int run_loop(const run_opts *op) {
             for (int i = 0; i < 5; i++) s[S_NGX_REQ + i] = ng[i];
             cs_writer_add(ws, s);
             det_slow(dt, s);
+            if (want_health && hfd < 0) hfd = health_try(o.health, &h_warned);
         }
         if (slow || det_fast_procs(dt)) {
             if (sampler_procs(smp, t, top, snap) == 0) {
@@ -341,6 +376,7 @@ static int run_loop(const run_opts *op) {
     sampler_close(smp);
     probe_free(prb);
     if (ngx >= 0) { close(ngx); unlink(o.nginx); }
+    if (hfd >= 0) close(hfd);
     free(agg); free(top); free(snap);
     close(tfd); close(sfd);
     return rc;
